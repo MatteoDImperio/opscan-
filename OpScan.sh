@@ -7,33 +7,36 @@
 # ==========================================================
 
 msf_suggestion() {
-    case "$1" in
+    local MSF_TARGET=$1
+    local SERVICE=$2
+
+    case "$SERVICE" in
         ftp)
-            echo " msfconsole -x 'use exploit/unix/ftp/vsftpd_234_backdoor; set RHOST \$TARGET; exploit'"
+            echo " msfconsole -x 'use exploit/unix/ftp/vsftpd_234_backdoor; set RHOST $MSF_TARGET; exploit'"
             ;;
         ssh)
-            echo " msfconsole -x 'use auxiliary/scanner/ssh/ssh_login; set RHOSTS \$TARGET; run'"
+            echo " msfconsole -x 'use auxiliary/scanner/ssh/ssh_login; set RHOSTS $MSF_TARGET; run'"
             ;;
         telnet)
-            echo " msfconsole -x 'use auxiliary/scanner/telnet/telnet_login; set RHOSTS \$TARGET; run'"
+            echo " msfconsole -x 'use auxiliary/scanner/telnet/telnet_login; set RHOSTS $MSF_TARGET; run'"
             ;;
         smtp)
-            echo " msfconsole -x 'use auxiliary/scanner/smtp/smtp_version; set RHOSTS \$TARGET; run'"
+            echo " msfconsole -x 'use auxiliary/scanner/smtp/smtp_version; set RHOSTS $MSF_TARGET; run'"
             ;;
         http)
-            echo " msfconsole -x 'use exploit/multi/http/apache_mod_cgi_bash_env_exec; set RHOST \$TARGET; exploit'"
+            echo " msfconsole -x 'use exploit/multi/http/apache_mod_cgi_bash_env_exec; set RHOST $MSF_TARGET; exploit'"
             ;;
         mysql)
-            echo " msfconsole -x 'use auxiliary/scanner/mysql/mysql_version; set RHOSTS \$TARGET; run'"
+            echo " msfconsole -x 'use auxiliary/scanner/mysql/mysql_version; set RHOSTS $MSF_TARGET; run'"
             ;;
         postgresql)
-            echo " msfconsole -x 'use auxiliary/scanner/postgres/postgres_version; set RHOSTS \$TARGET; run'"
+            echo " msfconsole -x 'use auxiliary/scanner/postgres/postgres_version; set RHOSTS $MSF_TARGET; run'"
             ;;
         vnc)
-            echo " msfconsole -x 'use auxiliary/scanner/vnc/vnc_login; set RHOSTS \$TARGET; run'"
+            echo " msfconsole -x 'use auxiliary/scanner/vnc/vnc_login; set RHOSTS $MSF_TARGET; run'"
             ;;
         *)
-            echo " Nessun exploit Metasploit predefinito per $1"
+            echo " Nessun exploit Metasploit predefinito per $SERVICE"
             ;;
     esac
 }
@@ -58,35 +61,40 @@ fi
 echo "[*] Scansione in corso su $TARGET..."
 echo "==== Risultati Scansione ===="
 
-nmap -p- -sV --open "$TARGET" | awk '/^[0-9]+\/tcp/{print}' | while read -r line; do
-    PORT=$(echo "$line" | awk '{print $1}')
-    SERVICE=$(echo "$line" | awk '{print $3}')
-    VERSION=$(echo "$line" | awk '{for (i=5; i<=NF; i++) printf $i " "; print ""}')
+# Ciclo su ogni host rilevato (anche in caso di rete)
+nmap -p- -sV --open "$TARGET" | awk '/Nmap scan report for/{print $NF}' | while read -r HOST; do
+    echo "[*] Target rilevato: $HOST"
 
-    echo "Target: $TARGET"
-    echo "Porta: $PORT | Servizio: $SERVICE"
-    echo "Versione: $VERSION"
+    nmap -p- -sV --open "$HOST" | awk '/^[0-9]+\/tcp/{print}' | while read -r line; do
+        PORT=$(echo "$line" | awk '{print $1}')
+        SERVICE=$(echo "$line" | awk '{print $3}')
+        VERSION=$(echo "$line" | awk '{for (i=5; i<=NF; i++) printf $i " "; print ""}')
 
-    echo "Suggerimento exploit predefinito:"
-    msf_suggestion "$SERVICE"
-    echo ""
+        echo "Target: $HOST"
+        echo "Porta: $PORT | Servizio: $SERVICE"
+        echo "Versione: $VERSION"
 
-    # ======================================================
-    # RICERCA EXPLOIT DINAMICA
-    # ======================================================
-    if command -v searchsploit >/dev/null 2>&1; then
-        echo "[*] Ricerca con Searchsploit per: $SERVICE $VERSION"
-        searchsploit "$SERVICE $VERSION" | head -n 10
-    else
-        echo "[!] Searchsploit non trovato, salto la ricerca locale."
-    fi
+        echo "Suggerimento exploit predefinito:"
+        msf_suggestion "$HOST" "$SERVICE"
+        echo ""
 
-    if command -v msfconsole >/dev/null 2>&1; then
-        echo "[*] Comando Metasploit pronto:"
-        echo " msfconsole -x 'search type:exploit $SERVICE $VERSION'"
-    else
-        echo "[!] Metasploit non installato, salto il comando."
-    fi
+        # ======================================================
+        # RICERCA EXPLOIT DINAMICA
+        # ======================================================
+        if command -v searchsploit >/dev/null 2>&1; then
+            echo "[*] Ricerca con Searchsploit per: $SERVICE $VERSION"
+            searchsploit "$SERVICE $VERSION" | head -n 10
+        else
+            echo "[!] Searchsploit non trovato, salto la ricerca locale."
+        fi
 
-    echo "---------------------------"
+        if command -v msfconsole >/dev/null 2>&1; then
+            echo "[*] Comando Metasploit pronto:"
+            echo " msfconsole -x 'search type:exploit $SERVICE $VERSION'"
+        else
+            echo "[!] Metasploit non installato, salto il comando."
+        fi
+
+        echo "---------------------------"
+    done
 done
